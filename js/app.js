@@ -32,7 +32,10 @@ const crow=k=>`<div class="row" onclick="openC='${k}';render()"><span>${IC[st(k)
 const empty=t=>`<div class="em">${t}</div>`;
 
 // ===== Acciones =====
-let view="dashboard",openC=null,openD=null,fil="TODOS",editN=-1,calY=new Date().getFullYear(),calM=new Date().getMonth();
+let view="dashboard",openC=null,openD=null,fil="TODOS",editN=-1,menuOpen=false,calY=new Date().getFullYear(),calM=new Date().getMonth();
+function toggleMenu(){menuOpen=!menuOpen;render()}
+function closeMenu(){if(menuOpen){menuOpen=false;render()}}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeMenu()});
 function setE(k,e){S.c[k]=S.c[k]||{};if(e)S.c[k].e=e;else delete S.c[k].e;if(e!=="APROBADO"){delete S.c[k].n;delete S.c[k].sa}save()}
 function saveApr(k){const n=parseFloat($("nf").value);S.c[k]=Object.assign(S.c[k]||{},{e:"APROBADO"});
 if(!isNaN(n))S.c[k].n=n;else delete S.c[k].n;S.c[k].sa=$("sa").value;save()}
@@ -90,12 +93,28 @@ ${!s.ap.length?`<div class="c em" style="margin-bottom:14px">Todavía no tienes 
 <div class="c"><h3>Cursos actuales</h3>${s.cu.map(k=>{const a=acc(k);return`<div class="row" onclick="openC='${k}';render()"><span class="sp">${esc(C[k].nombre)}</span><b>${a.m?Math.round(a.p/a.m*100):"—"}</b></div>`}).join("")||empty("No estás cursando ningún curso.")}</div>
 <div class="c"><h3>Cursos que puedo asignarme</h3>${s.di.map(crow).join("")||empty("Ninguno disponible por ahora.")}</div></div>`}
 
+// ----- Pensum: tarjetas con check de aprobado y desplegable -----
+let openP=new Set();
+function togP(k){openP.has(k)?openP.delete(k):openP.add(k);render()}
+function chk(k,v){if(!v)return setE(k,null);
+const q=[k],seen=new Set();while(q.length){const x=q.pop();if(seen.has(x))continue;seen.add(x);S.c[x]=S.c[x]||{};S.c[x].e="APROBADO";pre(C[x]).forEach(y=>q.push(y))}save()}
+function setNota(k,v){const n=parseFloat(v);S.c[k]=S.c[k]||{};if(isNaN(n))delete S.c[k].n;else S.c[k].n=Math.min(100,Math.max(0,n));save()}
+function pcard(k){const c=C[k],s=st(k),o=openP.has(k),cls=s==="APROBADO"?"ok":s==="CURSANDO"?"cu":s==="BLOQUEADO"?"no":"",d=S.c[k]||{};
+const pr=pre(c),po=post(c);
+const det=o?`<div class="pd"><b>Requisitos previos:</b>${pr.map(x=>`<div class="pi">${S.c[x]?.e==="APROBADO"?"✓":"✗"} [${x}] ${esc(C[x].nombre)}</div>`).join("")||`<div class="pi">Ninguno</div>`}
+${po.length?`<b class="pg">Es requisito de:</b>${po.map(x=>`<div class="pi">- [${x}] ${esc(C[x].nombre)}</div>`).join("")}`:""}
+${s==="APROBADO"?`<div class="pn"><b class="pg">Nota:</b><input type="number" min="0" max="100" placeholder="0 - 100" value="${d.n??""}" onchange="setNota('${k}',this.value)"></div>`:""}</div>`:"";
+return`<div class="c pc"><div class="ph"><input type="checkbox" ${s==="APROBADO"?"checked":""} aria-label="Aprobado: ${esc(c.nombre)}" onchange="chk('${k}',this.checked)"><span class="sp">Código: ${k} | ${c.Obligatorio?"Obligatorio":"Electivo"}</span><span class="cr">${c.creditos}</span></div>
+<div class="pb ${cls}"><div class="pt" onclick="togP('${k}')"><span class="sp">${esc(c.nombre)}</span><span>${o?"⌃":"⌄"}</span></div>${det}</div></div>`}
+
 function vPensum(){const sem=[...new Set(codes.map(k=>C[k].semestre))].sort((a,b)=>a-b);
-return`<h2>Pensum ${P.pensum_año}</h2><div class="g2">${sem.map(n=>`<div class="c"><h3>Semestre ${n}</h3>${codes.filter(k=>C[k].semestre===n).map(k=>crow(k)+(st(k)==="BLOQUEADO"?`<div class="s" style="padding:0 6px 8px 34px">Falta aprobar: ${falt(k).map(x=>esc(C[x].nombre)).join(", ")}</div>`:"")).join("")}</div>`).join("")}</div>`}
+return`<h2>Pensum ${P.pensum_año}</h2><div class="pz">${sem.map(n=>`<div class="pcol"><div class="c psh">Semestre ${n}</div>${codes.filter(k=>C[k].semestre===n).map(pcard).join("")}</div>`).join("")}</div>`}
 
 function vCursos(){const f=["TODOS","CURSANDO","APROBADO","DISPONIBLE","BLOQUEADO"];
 const l=codes.filter(k=>fil==="TODOS"||st(k)===fil);
-return`<h2>Cursos</h2><div class="f">${f.map(x=>`<button class="${fil===x?"p":""}" onclick="fil='${x}';render()">${x}</button>`).join("")}</div>
+const av=codes.filter(k=>st(k)==="DISPONIBLE"||st(k)==="CURSANDO");
+const pick=`<div class="c" style="margin-bottom:14px"><h3>Elegir cursos que estoy cursando</h3><div class="s" style="margin-bottom:6px">Solo aparecen los cursos disponibles (con prerrequisitos aprobados).</div>${av.map(k=>`<label class="row"><input type="checkbox" ${st(k)==="CURSANDO"?"checked":""} onchange="setE('${k}',this.checked?'CURSANDO':null)"><span class="sp">${esc(C[k].nombre)} <span class="s">· ${k} · Semestre ${C[k].semestre} · ${C[k].creditos} cr</span></span></label>`).join("")||empty("No hay cursos disponibles. Aprueba cursos en Pensum.")}</div>`;
+return`<h2>Cursos</h2>${pick}<div class="f">${f.map(x=>`<button class="${fil===x?"p":""}" onclick="fil='${x}';render()">${x}</button>`).join("")}</div>
 <div class="c">${l.map(crow).join("")||empty("No hay cursos con este estado.")}</div>`}
 
 function vCalendario(){const start=new Date(calY,calM,1).getDay(),dim=new Date(calY,calM+1,0).getDate(),cells=[];
@@ -141,16 +160,43 @@ function vConfig(){return`<h2>Configuración</h2><div class="g2"><div class="c">
 function modal(){if(!openC||!C[openC])return"";const k=openC,c=C[k],s=st(k),d=S.c[k]||{},a=acc(k);
 return`<div class="m" onclick="if(event.target===this){openC=null;render()}"><div role="dialog" aria-label="${esc(c.nombre)}"><div style="display:flex;gap:8px"><h2 class="sp" style="margin:0">${esc(c.nombre)}</h2><button aria-label="Cerrar" onclick="openC=null;render()">✕</button></div>
 <p class="s">Código ${k} · ${c.creditos?c.creditos+" créditos":"créditos sin definir"} · Semestre ${c.semestre} · ${c.Obligatorio?"Obligatorio":"Electivo"}</p><p>${badge(s)}${s==="APROBADO"&&d.n!=null?` Nota final: <b>${d.n}</b>`:""}${s==="CURSANDO"&&a.m?` Nota actual: <b>${Math.round(a.p/a.m*100)}</b> (${a.p}/${a.m})`:""}</p>
-<div class="f">${s==="BLOQUEADO"?`<span class="s">Falta aprobar: ${falt(k).map(x=>esc(C[x].nombre)).join(", ")}</span>`:`<button onclick="saveApr('${k}')" class="${s==="APROBADO"?"p":""}">Aprobado</button><button class="${s==="CURSANDO"?"p":""}" onclick="setE('${k}','CURSANDO')">Cursando</button>`}${S.c[k]?.e?`<button onclick="setE('${k}',null)">Quitar estado</button>`:""}</div>
+<div class="f">${s==="BLOQUEADO"?`<span class="s">Falta aprobar: ${falt(k).map(x=>esc(C[x].nombre)).join(", ")}</span>`:`<button onclick="saveApr('${k}')" class="${s==="APROBADO"?"p":""}">Aprobado</button>${s!=="APROBADO"?`<button class="${s==="CURSANDO"?"p":""}" onclick="setE('${k}','CURSANDO')">Cursando</button>`:""}`}${S.c[k]?.e?`<button onclick="setE('${k}',null)">Quitar estado</button>`:""}</div>
 ${s==="APROBADO"||s==="DISPONIBLE"?`<div class="f"><input id="nf" type="number" min="0" max="100" placeholder="Nota final" value="${d.n??""}"><input id="sa" placeholder="Semestre/año aprobado" value="${esc(d.sa||"")}"></div>`:""}
 <h3>Prerrequisitos</h3>${pre(c).map(x=>`<div>${S.c[x]?.e==="APROBADO"?"✓":"✗"} ${esc(C[x].nombre)}</div>`).join("")||`<div class="s">Ninguno</div>`}
 ${unk(c).length?`<div class="s" style="margin-top:6px">⚠ Prerrequisitos no definidos en el pensum (se ignoran): ${unk(c).join(", ")}</div>`:""}<h3 style="margin-top:12px">Postrequisitos</h3>${post(c).map(x=>`<div>→ ${esc(C[x].nombre)}</div>`).join("")||`<div class="s">Ninguno</div>`}
 ${s==="CURSANDO"?`<h3 style="margin-top:12px">Actividades</h3>${(d.ev||[]).map((e,i)=>`<div class="row" style="cursor:default"><span class="sp">${esc(e.n)}</span><span>${e.p} / ${e.m}</span><button class="d" aria-label="Quitar actividad" onclick="delEv('${k}',${i})">✕</button></div>`).join("")||`<div class="s">Sin actividades.</div>`}
 <div class="s" style="margin:6px 0">Total acumulado: <b>${a.p} / ${a.m}</b></div><div class="f"><input id="en" placeholder="Actividad"><input id="ep" type="number" placeholder="Obtenidos"><input id="em" type="number" placeholder="Máximo"><button class="p" onclick="addEv('${k}')">Agregar</button></div>`:""}</div></div>`}
 
+
+// ===== Estilos del pensum (se suman a tu CSS actual) =====
+(()=>{const st=document.createElement("style");st.textContent=`
+.pz{display:flex;gap:18px;overflow-x:auto;align-items:flex-start;padding-bottom:18px;scroll-behavior:auto;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.pcol{flex:0 0 296px;min-width:296px;scroll-snap-align:start}
+.psh{text-align:left;font-weight:800;font-size:15px;padding:8px 6px 12px;margin-bottom:12px;background:transparent;border:0;border-bottom:2px solid var(--bd);border-radius:0}
+.pc{padding:10px;margin:0 0 12px;border-radius:var(--radius-sm)}
+.ph{display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:600;color:var(--mu);margin-bottom:8px;font-family:var(--mono)}
+.ph input{width:19px;height:19px;cursor:pointer;margin:0}
+.ph input:disabled{cursor:not-allowed;opacity:.5}
+.cr{background:var(--card-2);color:var(--tx);border:1px solid var(--bd);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--mono);font-size:12px;flex:none}
+.pb{border:1px solid var(--bd);border-left:3px solid var(--bd);border-radius:10px;padding:11px 13px;background:var(--card)}
+.pb.ok{background:var(--ok-soft);border-color:var(--ok-soft);border-left-color:var(--ok)}
+.pb.no{background:var(--rd-soft);border-color:var(--rd-soft);border-left-color:var(--rd)}
+.pt{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:14.5px;line-height:1.3}
+.pt span:last-child{color:var(--mu);font-size:12px;flex:none}
+.pd{margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);font-size:13px;color:var(--mu)}
+.pd>b:first-child{display:block;margin-bottom:6px;font-weight:700;color:var(--tx);font-size:11px;letter-spacing:.02em}
+.pd .pi{padding:4px 0 4px 10px;border-left:2px solid var(--bd)}
+.pd .pg{display:block;margin-top:10px;font-weight:700;color:var(--tx);font-size:11px;letter-spacing:.02em}
+.pn{margin-top:10px}.pn input{display:block;width:100%;max-width:180px;margin-top:4px;padding:7px 9px;box-sizing:border-box;font-family:var(--mono)}
+main.wide{max-width:none!important;width:auto!important}
+@media(max-width:600px){.pcol{flex:0 0 82vw;min-width:260px}}
+`;document.head.appendChild(st)})();
+
 // ===== Render =====
 const NAV=[["dashboard","🏠","Dashboard",vDashboard],["pensum","📚","Pensum",vPensum],["cursos","🎓","Cursos",vCursos],["calendario","📅","Calendario",vCalendario],["proyectos","🛠","Proyectos",vProyectos],["notas","📝","Notas",vNotas],["estadisticas","📊","Estadísticas",vEstadisticas],["config","⚙️","Configuración",vConfig]];
-function render(){const y=scrollY,v=NAV.find(n=>n[0]===view)||NAV[0];
-$("app").innerHTML=`<nav aria-label="Principal"><h1>🎓 Panel Académico</h1>${NAV.map(n=>`<a class="${n[0]===view?"on":""}" onclick="go('${n[0]}')"><span>${n[1]}</span>${n[2]}</a>`).join("")}</nav><main>${v[3]()}</main>${modal()}${dayModal()}`;scrollTo(0,y)}
-function go(v){view=v;openC=null;openD=null;editN=-1;render();scrollTo(0,0)}
+function render(){const y=scrollY,x=scrollX,pz=document.querySelector(".pz"),pl=pz?pz.scrollLeft:0,m0=document.querySelector("main"),mt=m0?m0.scrollTop:0,v=NAV.find(n=>n[0]===view)||NAV[0];
+$("app").innerHTML=`<header class="appbar"><button class="menu-toggle" aria-label="${menuOpen?"Cerrar":"Abrir"} menú" aria-controls="primary-nav" aria-expanded="${menuOpen}" onclick="toggleMenu()"><span></span><span></span><span></span></button><strong>Panel Académico</strong></header>${menuOpen?`<button class="nav-backdrop" aria-label="Cerrar menú" onclick="closeMenu()"></button>`:""}<nav id="primary-nav" class="${menuOpen?"open":""}" aria-label="Principal" ${menuOpen?"":"inert aria-hidden=\"true\""}><h1>🎓 Panel Académico</h1>${NAV.map(n=>`<a class="${n[0]===view?"on":""}" onclick="go('${n[0]}')"><span>${n[1]}</span>${n[2]}</a>`).join("")}</nav><main class="${view==="pensum"?"wide":""}">${v[3]()}</main>${modal()}${dayModal()}`;
+const pz2=document.querySelector(".pz");if(pz2&&pl)pz2.scrollLeft=pl;const m1=document.querySelector("main");if(m1&&mt)m1.scrollTop=mt;
+scrollTo({top:y,left:x,behavior:"instant"})}
+function go(v){view=v;openC=null;openD=null;editN=-1;menuOpen=false;render();scrollTo(0,0)}
 render();
