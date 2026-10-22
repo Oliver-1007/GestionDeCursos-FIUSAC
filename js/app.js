@@ -11,7 +11,7 @@ mig();
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}render()}
 
 // ===== Lógica académica =====
-const C=P.cursos,codes=Object.keys(C);
+const C=P.cursos,codes=Object.keys(C),META_CREDITOS=300;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fd=d=>d?d.split("-").reverse().join("/"):"";
@@ -22,9 +22,9 @@ const falt=k=>pre(C[k]).filter(x=>S.c[x]?.e!=="APROBADO");
 const st=k=>S.c[k]?.e||(falt(k).length?"BLOQUEADO":"DISPONIBLE");
 const acc=k=>{const e=S.c[k]?.ev||[];return{p:e.reduce((a,x)=>a+x.p,0),m:e.reduce((a,x)=>a+x.m,0)}};
 function stats(){const by=s=>codes.filter(k=>st(k)===s);const ap=by("APROBADO"),cu=by("CURSANDO"),di=by("DISPONIBLE"),bl=by("BLOQUEADO");
-const tot=codes.reduce((a,k)=>a+C[k].creditos,0),ob=ap.reduce((a,k)=>a+C[k].creditos,0);
+const ob=ap.reduce((a,k)=>a+C[k].creditos,0);
 const ns=ap.map(k=>S.c[k].n).filter(n=>typeof n==="number");
-return{ap,cu,di,bl,tot,ob,pct:tot?ob/tot*100:0,avg:ns.length?ns.reduce((a,b)=>a+b,0)/ns.length:null}}
+return{ap,cu,di,bl,meta:META_CREDITOS,restantes:Math.max(0,META_CREDITOS-ob),ob,pct:Math.min(100,ob/META_CREDITOS*100),avg:ns.length?ns.reduce((a,b)=>a+b,0)/ns.length:null}}
 // ===== Iconos (trazo fino, 1.75px) =====
 const ico=(d,z=16)=>`<svg class="ic" width="${z}" height="${z}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const I={
@@ -144,7 +144,7 @@ const card=(k,v)=>`<div class="c"><div class="lb">${k}</div><div class="k">${v}<
 
 function vDashboard(){const s=stats(),sem=[...new Set(codes.map(k=>C[k].semestre))].sort((a,b)=>a-b);
 const row=(a,b,c)=>`<div style="margin-bottom:12px"><div class="s" style="display:flex;justify-content:space-between"><span>${a}</span><span>${b}</span></div><div class="bar"><i style="width:${c}%"></i></div></div>`;
-return`<h2>Dashboard</h2><div class="g">${card("Créditos obtenidos",s.ob)}${card("Créditos restantes",s.tot-s.ob)}${card("Créditos totales",s.tot)}${card("Avance de carrera",s.pct.toFixed(2)+"%")}${card("Cursos aprobados",s.ap.length)}${card("Cursando",s.cu.length)}${card("Pendientes",codes.length-s.ap.length-s.cu.length)}${card("Disponibles",s.di.length)}${card("Bloqueados",s.bl.length)}${card("Promedio",s.avg==null?"—":s.avg.toFixed(1))}</div>
+return`<h2>Dashboard</h2><div class="g">${card("Créditos obtenidos",s.ob)}${card("Créditos restantes",s.restantes)}${card("Créditos totales",s.meta)}${card("Avance de carrera",s.pct.toFixed(2)+"%")}${card("Cursos aprobados",s.ap.length)}${card("Cursando",s.cu.length)}${card("Pendientes",codes.length-s.ap.length-s.cu.length)}${card("Disponibles",s.di.length)}${card("Bloqueados",s.bl.length)}${card("Promedio",s.avg==null?"—":s.avg.toFixed(1))}</div>
 <div class="c" style="margin-bottom:14px"><div class="bar"><i style="width:${s.pct}%"></i></div></div>
 ${!s.ap.length?`<div class="c em" style="margin-bottom:14px">Todavía no tienes cursos aprobados.<br>Ve a Pensum y marca tus cursos aprobados para comenzar a calcular tu progreso.</div>`:""}
 <div class="g2"><div class="c"><h3>Próximas actividades</h3>${upcoming().slice(0,5).map(evRow).join("")||empty("Sin eventos próximos.")}</div>
