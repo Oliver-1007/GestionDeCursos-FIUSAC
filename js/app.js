@@ -106,7 +106,8 @@ function theme(){const r=document.documentElement;r.dataset.theme=r.dataset.them
 // ===== Horario semanal =====
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
 const H0=6,H1=22,ROWH=52;
-const timeToY=t=>{const[hh,mm]=t.split(":").map(Number);return(hh+mm/60-H0)*ROWH};
+const timeToHour=t=>{const[hh,mm]=t.split(":").map(Number);return hh+mm/60};
+const timeToY=t=>(timeToHour(t)-H0)*ROWH;
 let toastMsg=null,toastT=null;
 function toast(m){toastMsg=m;render();clearTimeout(toastT);toastT=setTimeout(()=>{toastMsg=null;render()},3500)}
 let detOpen=new Set(),hoSel={},hoSelK=null;
@@ -136,6 +137,46 @@ let lane=laneEnds.findIndex(e=>e<=ev.hi);
 if(lane===-1){lane=laneEnds.length;laneEnds.push(ev.hf)}else laneEnds[lane]=ev.hf;
 cluster.push({ev,lane});clusterEnd=clusterEnd===null||ev.hf>clusterEnd?ev.hf:clusterEnd}
 flush();return out}
+function downloadHorario(){
+const scale=2,gutter=72,dayWidth=220,headerH=44,gridH=(H1-H0)*ROWH;
+const canvas=document.createElement("canvas");
+canvas.width=(gutter+dayWidth*DIAS.length)*scale;canvas.height=(headerH+gridH)*scale;
+const ctx=canvas.getContext("2d");
+if(!ctx){alert("No se pudo generar la imagen del horario en este navegador.");return}
+ctx.scale(scale,scale);
+const grid=document.querySelector(".hoGrid"),style=getComputedStyle(grid);
+const bg=style.getPropertyValue("--card").trim()||getComputedStyle(document.documentElement).getPropertyValue("--card").trim();
+const fg=style.getPropertyValue("--tx").trim()||getComputedStyle(document.documentElement).getPropertyValue("--tx").trim();
+const muted=style.getPropertyValue("--mu").trim()||getComputedStyle(document.documentElement).getPropertyValue("--mu").trim();
+const border=style.getPropertyValue("--bd").trim()||getComputedStyle(document.documentElement).getPropertyValue("--bd").trim();
+const accent=style.getPropertyValue("--ac").trim()||getComputedStyle(document.documentElement).getPropertyValue("--ac").trim();
+const lab=style.getPropertyValue("--lab").trim()||getComputedStyle(document.documentElement).getPropertyValue("--lab").trim();
+ctx.fillStyle=bg;ctx.fillRect(0,0,canvas.width/scale,canvas.height/scale);
+ctx.font="500 13px Geist, Inter, sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+DIAS.forEach((day,i)=>{const x=gutter+i*dayWidth;ctx.fillStyle=muted;ctx.fillText(day,x+dayWidth/2,headerH/2);ctx.strokeStyle=border;ctx.beginPath();ctx.moveTo(x,headerH);ctx.lineTo(x,headerH+gridH);ctx.stroke()});
+ctx.textAlign="right";ctx.font="11px 'Geist Mono', monospace";
+for(let i=0;i<H1-H0;i++){const y=headerH+i*ROWH;ctx.fillStyle=muted;ctx.fillText(`${String(H0+i).padStart(2,"0")}:00`,gutter-8,y+12);ctx.strokeStyle=border;ctx.beginPath();ctx.moveTo(gutter,y);ctx.lineTo(gutter+dayWidth*DIAS.length,y);ctx.stroke()}
+ctx.strokeStyle=border;ctx.beginPath();ctx.moveTo(gutter,headerH+gridH);ctx.lineTo(gutter+dayWidth*DIAS.length,headerH+gridH);ctx.stroke();
+DIAS.forEach((_,di)=>layoutDay(S.ho.filter(x=>x.dias.includes(di))).forEach(({ev,lane,lanes})=>{
+const x=gutter+di*dayWidth+lane*dayWidth/lanes+2,y=headerH+timeToY(ev.hi);
+const w=dayWidth/lanes-4,h=Math.max(timeToY(ev.hf)-timeToY(ev.hi),22);
+ctx.fillStyle=bg;ctx.fillRect(x,y,w,h);ctx.fillStyle=ev.tipo==="Laboratorio"?lab:accent;ctx.fillRect(x,y,4,h);
+ctx.strokeStyle=ev.tipo==="Laboratorio"?lab:accent;ctx.setLineDash(ev.tipo==="Laboratorio"?[5,3]:[]);
+ctx.strokeRect(x+2,y+1,w-2,h-2);ctx.setLineDash([]);
+ctx.save();ctx.beginPath();ctx.rect(x+8,y+2,Math.max(0,w-12),Math.max(0,h-4));ctx.clip();
+ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle=fg;ctx.font="600 12px Geist, Inter, sans-serif";
+const name=C[ev.k]?.nombre||"?";const lines=[];let line="";
+for(const word of name.split(/\s+/)){const next=line?`${line} ${word}`:word;if(ctx.measureText(next).width>w-16&&line){lines.push(line);line=word}else line=next}
+if(line)lines.push(line);const maxLines=Math.max(1,Math.floor((h-6)/15)),shown=lines.slice(0,maxLines);
+const center=y+h/2;shown.forEach((text,i)=>ctx.fillText(text,x+w/2,center+(i-(shown.length-1)/2)*15,w-16));
+ctx.restore()
+}));
+canvas.toBlob(blob=>{
+if(!blob){alert("No se pudo generar el archivo PNG del horario.");return}
+const url=URL.createObjectURL(blob),link=document.createElement("a");
+link.href=url;link.download="mi-horario.png";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
+},"image/png")
+}
 
 // ===== Vistas =====
 function upcoming(){const t=today();return S.ev.filter(e=>!e.ok&&e.d>=t).sort((a,b)=>a.d.localeCompare(b.d)||byH(a,b))}
@@ -184,7 +225,7 @@ return`<h2>Calendario</h2><div class="f" style="align-items:center"><button aria
 return`<div class="dc" onclick="openD='${k}';openC=null;render()"><span class="dn ${k===T?"td":""}">${d}</span>${l.slice(0,3).map(e=>`<div class="ch" style="--c:${col(e.tipo)};${e.ok?"opacity:.5;text-decoration:line-through":""}">${e.h?e.h+" ":""}${esc(e.t)}</div>`).join("")}${l.length>3?`<div class="s">+${l.length-3} más</div>`:""}</div>`}).join("")}</div></div>
 <div class="f" style="margin-top:12px">${TIPOS.map(t=>`<span class="s"><span class="dot" style="background:${col(t)}"></span> ${t}</span>`).join("")}</div><div class="s">Toca un día para agregar un evento.</div>`}
 
-function vHorario(){const totalH=(H1-H0)*ROWH,av=codes.filter(k=>st(k)==="CURSANDO");
+function vHorario(){const av=codes.filter(k=>st(k)==="CURSANDO");
 if(!hoSelK||!av.includes(hoSelK))hoSelK=av[0]||null;
 const sel=hoSelK,mine=sel?S.ho.filter(x=>x.k===sel):[],daySel=sel?hoSel[sel]||(hoSel[sel]=new Set()):new Set();
 const form=av.length?`<div class="c hoPanel" style="margin-bottom:14px"><h3>Agregar horario</h3>
@@ -196,14 +237,14 @@ ${mine.length?`<div style="margin-bottom:10px">${mine.map(x=>`<div class="row" s
 <button class="p" style="margin-top:10px" onclick="addHorario()">Agregar horario</button></div>`
 :`<div class="c em" style="margin-bottom:14px">Marca algún curso como "Cursando" en la pestaña Cursos para poder agregarle horario.</div>`;
 const cols=DIAS.map((d,di)=>{const laid=layoutDay(S.ho.filter(x=>x.dias.includes(di)));
-return`<div class="hoCol" style="height:${totalH}px;background-size:100% ${ROWH}px">${laid.map(({ev:x,lane,lanes})=>`<div class="hoEv ${x.tipo==="Laboratorio"?"hoLab":"hoMag"}" style="top:${timeToY(x.hi)}px;height:${Math.max(timeToY(x.hf)-timeToY(x.hi),22)}px;left:calc(${lane*100/lanes}% + 2px);width:calc(${100/lanes}% - 4px)" title="${esc(C[x.k]?.nombre||"")} · ${x.tipo} · ${x.hi}-${x.hf}" onclick="openC='${x.k}';render()"><b>${esc(C[x.k]?.nombre||"?")}</b></div>`).join("")}</div>`}).join("");
+return`<div class="hoCol" style="height:calc(var(--ho-row-height) * ${H1-H0});background-size:100% var(--ho-row-height)">${laid.map(({ev:x,lane,lanes})=>`<div class="hoEv ${x.tipo==="Laboratorio"?"hoLab":"hoMag"}" style="top:calc(var(--ho-row-height) * ${timeToHour(x.hi)-H0});height:max(calc(var(--ho-row-height) * ${timeToHour(x.hf)-timeToHour(x.hi)}),12px);left:calc(${lane*100/lanes}% + 2px);width:calc(${100/lanes}% - 4px)" title="${esc(C[x.k]?.nombre||"")} · ${x.tipo} · ${x.hi}-${x.hf}" onclick="openC='${x.k}';render()"><b>${esc(C[x.k]?.nombre||"?")}</b></div>`).join("")}</div>`}).join("");
 const grid=`<div class="c x"><div class="hoGrid">
 <div class="hoHead"></div>${DIAS.map(d=>`<div class="hoHead">${d}</div>`).join("")}
-<div class="hoHours">${Array.from({length:H1-H0},(_,i)=>H0+i).map(h=>`<div class="hoHr" style="height:${ROWH}px">${String(h).padStart(2,"0")}:00</div>`).join("")}</div>
+<div class="hoHours">${Array.from({length:H1-H0},(_,i)=>H0+i).map(h=>`<div class="hoHr">${String(h).padStart(2,"0")}:00</div>`).join("")}</div>
 ${cols}
 </div></div>`;
 return`<h2>Horario</h2>${form}<div class="f" style="margin-bottom:12px">${[["Magistral","var(--ac)"],["Laboratorio","var(--lab)"]].map(([t,c])=>`<span class="s"><span class="dot" style="background:${c}"></span> ${t}</span>`).join("")}</div>
-${S.ho.length?grid:empty("Aún no agregas horario.")}`}
+${S.ho.length?`${grid}<button class="p hoDownload" onclick="downloadHorario()">Descargar horario .PNG</button>`:empty("Aún no agregas horario.")}`}
 
 function dayModal(){if(!openD)return"";const[y,m,d]=openD.split("-"),l=S.ev.filter(e=>e.d===openD).sort(byH);
 return`<div class="m" onclick="if(event.target===this){openD=null;render()}"><div role="dialog" aria-label="Eventos del día"><div style="display:flex;gap:8px"><h2 class="sp" style="margin:0;font-size:20px">${+d} de ${MES[m-1]} de ${y}</h2><button aria-label="Cerrar" onclick="openD=null;render()">${I.x}</button></div>
