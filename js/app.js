@@ -3,6 +3,11 @@ for(const k in P.cursos){const c=P.cursos[k];c.nombre=(c.nombre||"").trim()||"Cu
 
 // ===== Persistencia local =====
 const KEY="panel-academico-v1";
+const VIEW_KEY="panel-academico-view-v1",THEME_KEY="panel-academico-theme-v1";
+function getPreference(key){try{return localStorage.getItem(key)}catch(e){return null}}
+function setPreference(key,value){try{localStorage.setItem(key,value)}catch(e){}}
+const savedTheme=getPreference(THEME_KEY);
+if(savedTheme==="light"||savedTheme==="dark")document.documentElement.dataset.theme=savedTheme;
 const blank=()=>({c:{},ev:[],pr:[],nt:[],ho:[]});
 let S=blank();
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(blank(),JSON.parse(r))}catch(e){}
@@ -101,7 +106,7 @@ function imp(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.o
 if(!o||typeof o.c!=="object"||!Array.isArray(o.ev)||!Array.isArray(o.pr)||!Array.isArray(o.nt))throw 0;
 if(confirm("Esto reemplazará tus datos actuales. ¿Continuar?")){S=o;mig();save()}}catch(e){alert("El archivo no es un respaldo válido.")}};r.readAsText(f)}
 function reset(){if(confirm("¿Borrar TODOS tus datos personales de este navegador? No se puede deshacer.")){S=blank();save()}}
-function theme(){const r=document.documentElement;r.dataset.theme=r.dataset.theme==="dark"?"light":"dark"}
+function theme(){const r=document.documentElement;r.dataset.theme=r.dataset.theme==="dark"?"light":"dark";setPreference(THEME_KEY,r.dataset.theme)}
 
 // ===== Horario semanal =====
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
@@ -288,9 +293,11 @@ ${s==="CURSANDO"?`<h3 style="margin-top:12px">Actividades</h3>${(d.ev||[]).map((
 
 // ===== Render =====
 const NAV=[["dashboard",I.dash,"Dashboard",vDashboard],["pensum",I.book,"Pensum",vPensum],["cursos",I.cap,"Cursos",vCursos],["calendario",I.cal,"Calendario",vCalendario],["horario",I.clock,"Horario",vHorario],["proyectos",I.folder,"Proyectos",vProyectos],["notas",I.note,"Notas",vNotas],["config",I.cfg,"Configuración",vConfig]];
+const savedView=getPreference(VIEW_KEY);
+if(NAV.some(n=>n[0]===savedView))view=savedView;
 function render(){const y=scrollY,x=scrollX,pz=document.querySelector(".pz"),pl=pz?pz.scrollLeft:0,m0=document.querySelector("main"),mt=m0?m0.scrollTop:0,v=NAV.find(n=>n[0]===view)||NAV[0];
 $("app").innerHTML=`<header class="appbar"><button class="menu-toggle" aria-label="Abrir menú" aria-controls="primary-nav" aria-expanded="${menuOpen}" onclick="toggleMenu()"><span></span><span></span><span></span></button><div class="crumb"><span>Panel Académico</span>${I.chev}<b>${v[2]}</b></div></header>${menuOpen?`<button class="nav-backdrop" aria-label="Cerrar menú" onclick="closeMenu()"></button>`:""}<nav id="primary-nav" class="${menuOpen?"open":""}" aria-label="Principal"><h1><span class="logo">${ico('<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',16)}</span>Panel Académico</h1>${NAV.map(n=>`<a class="${n[0]===view?"on":""}" onclick="go('${n[0]}')"><span>${n[1]}</span>${n[2]}</a>`).join("")}</nav><main class="${view==="pensum"?"wide":""}">${v[3]()}</main>${modal()}${dayModal()}${toastMsg?`<div class="toast">${esc(toastMsg)}</div>`:""}`;
 const pz2=document.querySelector(".pz");if(pz2&&pl)pz2.scrollLeft=pl;const m1=document.querySelector("main");if(m1&&mt)m1.scrollTop=mt;
 scrollTo({top:y,left:x,behavior:"instant"})}
-function go(v){view=v;openC=null;openD=null;editN=-1;menuOpen=false;render();scrollTo(0,0)}
+function go(v){view=v;setPreference(VIEW_KEY,view);openC=null;openD=null;editN=-1;menuOpen=false;render();scrollTo(0,0)}
 render();
